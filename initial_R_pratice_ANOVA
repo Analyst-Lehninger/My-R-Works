@@ -1,0 +1,138 @@
+#This is my first excursion into R. Leave some tips or suggestions if you feel like it.
+
+#The data is from my own research in graduate school. Isn't it simpler to do analysis on data that is well known? I think so.
+
+#This is a compilation of many trials and errors.
+
+#Rstudio 2way-RM-ANOVA
+
+#ANOVA 2-way with repeated measures
+#packages used
+> library(datarium)
+> library(ggplot2)
+> library(ggpubr)
+> library(readr)
+> library(tidyverse)
+> library(rstatix)
+> library(readxl)
+
+# import csv file
+> AP41CSV <- read_csv("My Data Sources/wideAP41.csv")
+
+#make non-numbers into factors
+> AP41CSV$genotype <- as.factor(AP41CSV$genotype)
+> AP41CSV$mouse <- as.factor(AP41CSV$mouse)
+> AP41CSV$time <- as.factor(AP41CSV$time)
+
+#see if table has factors
+> head(AP41CSV, 3)
+# A tibble: 3 × 4
+  mouse    tg time  genotype
+  <fct> <dbl> <fct> <fct>   
+1 1      72.9 t0    Pck1ff  
+2 2      63.0 t0    Pck1ff  
+3 3      44.7 t0    Pck1ff
+
+#make a boxplot
+> bxp <- ggboxplot(
++    AP41CSV, x = "time", y = "tg",
++    color = "genotype", palette = "jco"
++ )
+> bxp
+
+
+#broadly look at summary statistics
+> AP41CSV %>%
++ group_by(genotype, time) %>%
++ get_summary_stats(tg, type = “full”)
+# A tibble: 6 × 15
+  time  group  variable n min max median  q1   q3   iqr    mad   mean     sd
+  <fct> <fct>  <fct>    <dbl> <dbl> <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>
+1 T0hr  Pck1ff tg 23 30  125   45     40.0   73.0   33.0   19.3   60.1   27.1
+2 T2hr  Pck1ff tg 23 399 5449 1077   1016.  1907    891.   181.  1554.  1096. 
+3 T4hr  Pck1ff tg 23 1452 9799 3710.  3436   5932   2496   2352.  4658.  2016. 
+4 T0hr  Villi… tg 23 29    82   40.1   33     57     24     16.1   47.1   15.8
+5 T2hr  Villi… tg 23 803  3111 1138.   955.  1453.   498.   317.  1434.   661. 
+6 T4hr  Villi… tg 23 2185 7975 3314.  2379   4520.  2140.  1537.  3923.  1940. 
+# ℹ 2 more variables: se <dbl>, ci <dbl>
+
+#check ANOVA assumptions
+> AP41CSV_CSV_AP41 %>%
++    group_by(group, time) %>%
++    shapiro_test(tg)
+
+# A tibble: 6 × 5
+  time  group              variable statistic       p
+  <fct> <fct>              <chr>        <dbl>   <dbl>
+1 T0hr  Pck1ff             tg           0.935 0.143  
+2 T2hr  Pck1ff             tg           0.924 0.0832 
+3 T4hr  Pck1ff             tg           0.940 0.183  
+4 T0hr  Villin-Cre, Pck1ff tg           0.909 0.0387 
+5 T2hr  Villin-Cre, Pck1ff tg           0.897 0.0217 
+6 T4hr  Villin-Cre, Pck1ff tg           0.879 0.00977
+#output says data is not gaussian
+
+#log transform data, hope for gaussian 
+> AP41CSV_CSV_AP41$tg <- log(AP41CSV_CSV_AP41$tg)
+> head(AP41CSV_CSV_AP41, 5)
+# A tibble: 5 × 4
+  mouse    tg time  group 
+  <fct> <dbl> <fct> <fct> 
+1 1      4.29 T0hr  Pck1ff
+2 2      4.14 T0hr  Pck1ff
+3 3     NA    T0hr  Pck1ff
+4 4      3.80 T0hr  Pck1ff
+5 5      3.48 T0hr  Pck1ff
+
+
+
+
+
+# pairwise comparisons
+> pwc <- AP41CSV_CSV_AP41 %>%
++    pairwise_t_test(
++        tg ~ time, paired = TRUE,
++        p.adjust.method = "bonferroni"
++    )
+> pwc
+# A tibble: 3 × 10
+  .y.   group1 group2    n1    n2 statistic    df        p    p.adj p.adj.signif
+* <chr> <chr>  <chr>  <int> <int>     <dbl> <dbl>    <dbl>    <dbl> <chr>       
+1 tg    T0hr   T2hr      46    46     -61.5    45 4.71e-45 1.41e-44 ****        
+2 tg    T0hr   T4hr      46    46     -68.5    45 3.82e-47 1.15e-46 ****        
+3 tg    T2hr   T4hr      46    46     -18.3    45 1.80e-22 5.40e-22 ****
+
+# for a new df 
+# nona_AP41 <- AP41CSV_CSV_AP41 %>% filter(!is.na(tg))
+#to replace df, use below 
+AP41CSV_CSV_AP41 %>% filter(!is.na(tg))
+# A tibble: 138 × 4
+   mouse    tg time  group 
+   <fct> <dbl> <fct> <fct> 
+ 1 1      4.29 T0hr  Pck1ff
+ 2 2      4.14 T0hr  Pck1ff
+ 3 4      3.80 T0hr  Pck1ff
+ 4 5      3.48 T0hr  Pck1ff
+ 5 6      3.65 T0hr  Pck1ff
+ 6 7      3.80 T0hr  Pck1ff
+ 7 8      3.71 T0hr  Pck1ff
+ 8 9      4.06 T0hr  Pck1ff
+ 9 11     4.72 T0hr  Pck1ff
+10 12     4.54 T0hr  Pck1ff
+
+
+#this error keeps showing about all my data is NA. See below, the data is not NA. I read the problem may be the way the data was transformed. 
+> res.aov <- anova_test(
++    data = nona_AP41, dv = tg, wid = mouse,
++    within = c(group, time)
++    )
+Error in lm.fit(x, y, offset = offset, singular.ok = singular.ok, ...) : 
+  0 (non-NA) cases
+> all(is.na(nona_AP41$mouse))
+[1] FALSE
+> all(is.na(nona_AP41$tg))
+[1] FALSE
+> all(is.na(nona_AP41$time))
+[1] FALSE
+> all(is.na(nona_AP41$group))
+[1] FALSE
